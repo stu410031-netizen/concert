@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2026 精彩演唱會 - 報名與掃碼簽到系統</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #0f172a; color: #f8fafc;
+      display: flex; justify-content: center; align-items: center;
+      min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box;
+    }
+    .card {
+      background: #1e293b; padding: 2rem; border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 100%; max-width: 440px;
+    }
+    h2 { color: #38bdf8; text-align: center; margin-top: 0; }
+    .nav-tabs { display: flex; gap: 10px; margin-bottom: 1.2rem; }
+    .tab-btn {
+      flex: 1; padding: 0.6rem; background: #0f172a; border: 1px solid #334155;
+      color: #94a3b8; border-radius: 8px; cursor: pointer; font-weight: bold;
+    }
+    .tab-btn.active { background: #0284c7; color: #fff; border-color: #0284c7; }
+    .status-badge {
+      background: #0f172a; border: 1px solid #334155; padding: 10px;
+      border-radius: 8px; text-align: center; margin-bottom: 1rem; font-size: 0.9rem;
+    }
+    .status-badge span { color: #f59e0b; font-weight: bold; }
+    .form-group { margin-bottom: 1.1rem; }
+    label { display: block; margin-bottom: 0.4rem; font-size: 0.88rem; color: #94a3b8; }
+    input {
+      width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid #334155;
+      background: #0f172a; color: #fff; box-sizing: border-box; font-size: 1rem;
+    }
+    button.submit-btn {
+      width: 100%; padding: 0.85rem; border: none; border-radius: 8px;
+      background: #0284c7; color: white; font-size: 1rem; font-weight: bold; cursor: pointer;
+    }
+    button.submit-btn:disabled { background: #475569; cursor: not-allowed; }
+    .green-btn { background: #10b981 !important; margin-top: 10px; }
+    .cancel-btn { background: #ef4444 !important; margin-top: 10px; }
+    .result-box {
+      margin-top: 1rem; padding: 1rem; border-radius: 8px;
+      text-align: center; display: none; font-weight: bold;
+    }
+    .res-success { background: #064e3b; color: #34d399; border: 1px solid #059669; }
+    .res-warning { background: #78350f; color: #fbbf24; border: 1px solid #d97706; }
+    .res-error { background: #7f1d1d; color: #f87171; border: 1px solid #dc2626; }
+    .admin-footer { margin-top: 1.5rem; text-align: center; border-top: 1px solid #334155; padding-top: 1rem; display: flex; justify-content: space-between; }
+    .admin-link { color: #64748b; font-size: 0.85rem; cursor: pointer; }
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 15px; background: #000; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>🎵 2026 精彩演唱會</h2>
+    
+    <!-- 首次設定 API 網址面板 -->
+    <div id="secSetup" style="display: none; background:#0f172a; padding:15px; border-radius:8px; border:1px solid #f59e0b; margin-bottom:15px;">
+      <div style="color:#f59e0b; font-weight:bold; margin-bottom:8px;">⚙️ 首次連線設定</div>
+      <div style="font-size:0.85rem; color:#cbd5e1; margin-bottom:10px;">請貼上 Google Apps Script 部署後的網頁應用程式網址（結尾為 /exec）：</div>
+      <input type="url" id="apiUrlInput" placeholder="https://script.google.com/macros/s/.../exec" style="margin-bottom:10px;">
+      <button type="button" class="submit-btn green-btn" onclick="saveApiUrl()">儲存並連線試算表</button>
+    </div>
+
+    <div class="nav-tabs" id="userTabs">
+      <button class="tab-btn active" id="tabReg" onclick="switchTab('reg')">線上報名</button>
+      <button class="tab-btn" id="tabQuery" onclick="switchTab('query')">查詢／退票</button>
+    </div>
+
+    <div id="secReg">
+      <div class="status-badge">門票總數：100 張 | 剩餘 <span id="remCount">讀取中...</span> 張</div>
+      <form id="regForm">
+        <div class="form-group"><label>姓名</label><input type="text" id="name" required></div>
+        <div class="form-group"><label>電子郵件 (接收 QR Code 憑證)</label><input type="email" id="email" required></div>
+        <div class="form-group"><label>聯絡電話</label><input type="tel" id="phone" required></div>
+        <div class="form-group"><label>報名張數</label><input type="number" id="ticketCount" value="1" min="1" max="4" required></div>
+        <button type="submit" class="submit-btn" id="regBtn">立即報名</button>
+      </form>
+    </div>
+
+    <div id="secQuery" style="display: none;">
+      <form id="queryForm">
+        <div class="form-group"><label>輸入報名 Email 或序號 (如 TIX-001)</label><input type="text" id="queryInput" required></div>
+        <button type="submit" class="submit-btn" id="queryBtn">查詢紀錄</button>
+      </form>
+      <div id="queryResult" style="margin-top:1rem; background:#0f172a; padding:1rem; border-radius:8px; display:none;"></div>
+    </div>
+
+    <div id="secAdmin" style="display: none;">
+      <h3 style="color:#10b981; text-align:center; margin-top:0;">📷 現場 QR Code 掃碼簽到</h3>
+      <div id="reader"></div>
+      <button type="button" class="submit-btn" id="camBtn" onclick="toggleCamera()" style="background:#f59e0b; color:#0f172a; margin-bottom:15px;">開啟相機掃描 QR Code</button>
+
+      <form id="manualCheckForm">
+        <div class="form-group">
+          <label>或手動輸入序號簽到</label>
+          <input type="text" id="manualCode" placeholder="例如：TIX-001" style="text-transform:uppercase; text-align:center;">
+        </div>
+        <button type="submit" class="submit-btn green-btn" id="manualBtn">手動確認簽到</button>
+      </form>
+
+      <div class="result-box" id="checkResult"></div>
+      <button type="button" class="submit-btn cancel-btn" onclick="exitAdmin()" style="margin-top:20px;">退出管理後台</button>
+    </div>
+
+    <div class="admin-footer" id="adminFooter">
+      <span class="admin-link" onclick="loginAdmin()">🔒 工作人員掃碼簽到</span>
+      <span class="admin-link" onclick="resetApiUrl()">⚙️ 重設試算表網址</span>
+    </div>
+  </div>
+
+  <script>
+    let API_URL = localStorage.getItem("CONCERT_API_URL") || "";
+    let html5QrCode = null;
+    let isScanning = false;
+
+    window.onload = function() {
+      if (!API_URL || !API_URL.includes("/exec")) {
+        document.getElementById("secSetup").style.display = "block";
+        document.getElementById("remCount").innerText = "尚未連線";
+      } else {
+        loadStatus();
+      }
+    };
+
+    function saveApiUrl() {
+      const val = document.getElementById("apiUrlInput").value.trim();
+      if (!val.startsWith("https://script.google.com/")) {
+        alert("請貼上正確的 Google Apps Script 網址！");
+        return;
+      }
+      localStorage.setItem("CONCERT_API_URL", val);
+      API_URL = val;
+      document.getElementById("secSetup").style.display = "none";
+      loadStatus();
+    }
+
+    function resetApiUrl() {
+      document.getElementById("apiUrlInput").value = API_URL;
+      document.getElementById("secSetup").style.display = "block";
+    }
+
+    function loadStatus() {
+      document.getElementById("remCount").innerText = "讀取中...";
+      fetch(`${API_URL}?action=status`)
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("remCount").innerText = data.remaining;
+        })
+        .catch(() => {
+          document.getElementById("remCount").innerText = "連線失敗";
+          document.getElementById("secSetup").style.display = "block";
+        });
+    }
+
+    function switchTab(tab) {
+      document.getElementById("tabReg").className = tab === 'reg' ? 'tab-btn active' : 'tab-btn';
+      document.getElementById("tabQuery").className = tab === 'query' ? 'tab-btn active' : 'tab-btn';
+      document.getElementById("secReg").style.display = tab === 'reg' ? 'block' : 'none';
+      document.getElementById("secQuery").style.display = tab === 'query' ? 'block' : 'none';
+    }
+
+    document.getElementById("regForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      if (!API_URL) { alert("請先設定試算表連線網址！"); return; }
+      const btn = document.getElementById("regBtn");
+      btn.disabled = true; btn.innerText = "報名處理中...";
+
+      const payload = {
+        action: "register",
+        name: document.getElementById("name").value,
+        email: document.getElementById("email").value,
+        phone: document.getElementById("phone").value,
+        ticketCount: document.getElementById("ticketCount").value
+      };
+
+      fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(data => {
+        btn.disabled = false; btn.innerText = "立即報名";
+        if (data.status === "success") {
+          alert(`🎉 報名成功！您的序號為：${data.ticketCode}\n專屬 QR Code 憑證已寄至您的 Email！`);
+          document.getElementById("remCount").innerText = data.remaining;
+          document.getElementById("regForm").reset();
+        } else {
+          alert("❌ 報名失敗：" + data.message);
+        }
+      })
+      .catch(() => {
+        btn.disabled = false; btn.innerText = "立即報名";
+        alert("⚠️ 系統連線錯誤，請檢查試算表網址。");
+      });
+    });
+
+    document.getElementById("queryForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const q = document.getElementById("queryInput").value;
+      const btn = document.getElementById("queryBtn");
+      const box = document.getElementById("queryResult");
+      btn.disabled = true; btn.innerText = "查詢中...";
+
+      fetch(`${API_URL}?action=query&q=${encodeURIComponent(q)}`)
+        .then(res => res.json())
+        .then(data => {
+          btn.disabled = false; btn.innerText = "查詢紀錄";
+          box.style.display = "block";
+          if (data.status === "success") {
+            box.innerHTML = `
+              <div style="color:#38bdf8; font-weight:bold; font-size:1.2rem;">序號：${data.ticketCode}</div>
+              <div>持票人：${data.name}（${data.ticketCount} 張）</div>
+              <div>狀態：<span style="color:#34d399;">${data.checkInStatus}</span></div>
+              <button class="submit-btn cancel-btn" onclick="cancelTicket('${data.ticketCode}')">申請退票</button>
+            `;
+          } else {
+            box.innerHTML = `<span style="color:#f87171;">${data.message}</span>`;
+          }
+        });
+    });
+
+    function cancelTicket(code) {
+      if (!confirm(`確定要取消序號 ${code} 嗎？`)) return;
+      fetch(`${API_URL}?action=cancel&code=${encodeURIComponent(code)}`)
+        .then(res => res.json())
+        .then(data => {
+          alert(data.message);
+          document.getElementById("queryResult").style.display = "none";
+          loadStatus();
+        });
+    }
+
+    function loginAdmin() {
+      if (prompt("請輸入工作人員密碼：") === "1234") {
+        document.getElementById("userTabs").style.display = "none";
+        document.getElementById("secReg").style.display = "none";
+        document.getElementById("secQuery").style.display = "none";
+        document.getElementById("adminFooter").style.display = "none";
+        document.getElementById("secAdmin").style.display = "block";
+      } else {
+        alert("❌ 密碼錯誤");
+      }
+    }
+
+    function exitAdmin() {
+      if (isScanning && html5QrCode) {
+        html5QrCode.stop().then(() => { isScanning = false; });
+      }
+      document.getElementById("secAdmin").style.display = "none";
+      document.getElementById("userTabs").style.display = "flex";
+      document.getElementById("adminFooter").style.display = "flex";
+      switchTab('reg');
+    }
+
+    function toggleCamera() {
+      const btn = document.getElementById("camBtn");
+      if (!isScanning) {
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 220, height: 220 } },
+          (decodedText) => {
+            html5QrCode.pause();
+            executeCheckIn(decodedText);
+            setTimeout(() => { if (isScanning) html5QrCode.resume(); }, 2500);
+          },
+          () => {}
+        ).then(() => {
+          isScanning = true;
+          btn.innerText = "🛑 關閉相機";
+          btn.style.background = "#ef4444";
+          btn.style.color = "#fff";
+        }).catch(() => {
+          alert("無法開啟相機，請允許瀏覽器的相機使用權限。");
+        });
+      } else {
+        html5QrCode.stop().then(() => {
+          isScanning = false;
+          btn.innerText = "開啟相機掃描 QR Code";
+          btn.style.background = "#f59e0b";
+          btn.style.color = "#0f172a";
+        });
+      }
+    }
+
+    document.getElementById("manualCheckForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const code = document.getElementById("manualCode").value;
+      executeCheckIn(code);
+      document.getElementById("manualCode").value = "";
+    });
+
+    function executeCheckIn(code) {
+      const resBox = document.getElementById("checkResult");
+      resBox.style.display = "block";
+      resBox.className = "result-box";
+      resBox.style.background = "#334155";
+      resBox.style.color = "#fff";
+      resBox.innerText = `正在驗證序號 ${code}...`;
+
+      fetch(`${API_URL}?action=checkin&code=${encodeURIComponent(code)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === "success") resBox.className = "result-box res-success";
+          else if (data.status === "warning") resBox.className = "result-box res-warning";
+          else resBox.className = "result-box res-error";
+          resBox.innerText = data.message;
+        })
+        .catch(() => {
+          resBox.className = "result-box res-error";
+          resBox.innerText = "⚠️ 網路連線失敗，請重試";
+        });
+    }
+  </script>
+</body>
+</html>
