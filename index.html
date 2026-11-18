@@ -105,11 +105,45 @@
   </div>
 
   <script>
-    // 👇 就是這一行！把引號裡面的字換成你的 /exec 網址即可
-    const API_URL = "https://script.google.com/macros/s/AKfycbz6zdSyNnMXLLTm6Mq-Am7FWpuah0cHqnkbbbO8HHH5KyjUj4P5mv5k02e1FqbiJAF3/exec";
+    const API_URL = "https://script.google.com/a/macros/kssh.khc.edu.tw/s/AKfycbz6zdSyNnMXLLTm6Mq-Am7FWpuah0cHqnkbbbO8HHH5KyjUj4P5mv5k02e1FqbiJAF3/exec";
 
     let html5QrCode = null;
     let isScanning = false;
+
+    // 透過 JSONP 繞過學校網域 CORS 限制呼叫 Apps Script
+    function callApi(params) {
+      return new Promise((resolve, reject) => {
+        const cbName = "gs_cb_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+        const query = Object.keys(params)
+          .map(k => encodeURIComponent(k) + "=" + encodeURIComponent(params[k]))
+          .join("&");
+        
+        const script = document.createElement("script");
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error("連線逾時，請確認已登入學校 Google 帳號且版本已更新"));
+        }, 12000);
+
+        function cleanup() {
+          clearTimeout(timer);
+          delete window[cbName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+        }
+
+        window[cbName] = function(data) {
+          cleanup();
+          resolve(data);
+        };
+
+        script.onerror = function() {
+          cleanup();
+          reject(new Error("連線失敗"));
+        };
+
+        script.src = `${API_URL}?${query}&callback=${cbName}`;
+        document.body.appendChild(script);
+      });
+    }
 
     window.onload = function() {
       loadStatus();
@@ -117,13 +151,12 @@
 
     function loadStatus() {
       document.getElementById("remCount").innerText = "讀取中...";
-      fetch(`${API_URL}?action=status`)
-        .then(res => res.json())
+      callApi({ action: "status" })
         .then(data => {
           document.getElementById("remCount").innerText = data.remaining;
         })
         .catch(() => {
-          document.getElementById("remCount").innerText = "連線失敗";
+          document.getElementById("remCount").innerText = "連線失敗 (請確認已登入學校帳號)";
         });
     }
 
@@ -139,20 +172,13 @@
       const btn = document.getElementById("regBtn");
       btn.disabled = true; btn.innerText = "報名處理中...";
 
-      const payload = {
+      callApi({
         action: "register",
         name: document.getElementById("name").value,
         email: document.getElementById("email").value,
         phone: document.getElementById("phone").value,
         ticketCount: document.getElementById("ticketCount").value
-      };
-
-      fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
       })
-      .then(res => res.json())
       .then(data => {
         btn.disabled = false; btn.innerText = "立即報名";
         if (data.status === "success") {
@@ -163,9 +189,9 @@
           alert("❌ 報名失敗：" + data.message);
         }
       })
-      .catch(() => {
+      .catch(err => {
         btn.disabled = false; btn.innerText = "立即報名";
-        alert("⚠️ 系統連線錯誤，請確認 API_URL 設定。");
+        alert("⚠️ " + err.message);
       });
     });
 
@@ -176,8 +202,7 @@
       const box = document.getElementById("queryResult");
       btn.disabled = true; btn.innerText = "查詢中...";
 
-      fetch(`${API_URL}?action=query&q=${encodeURIComponent(q)}`)
-        .then(res => res.json())
+      callApi({ action: "query", q: q })
         .then(data => {
           btn.disabled = false; btn.innerText = "查詢紀錄";
           box.style.display = "block";
@@ -196,8 +221,7 @@
 
     function cancelTicket(code) {
       if (!confirm(`確定要取消序號 ${code} 嗎？`)) return;
-      fetch(`${API_URL}?action=cancel&code=${encodeURIComponent(code)}`)
-        .then(res => res.json())
+      callApi({ action: "cancel", code: code })
         .then(data => {
           alert(data.message);
           document.getElementById("queryResult").style.display = "none";
@@ -273,8 +297,7 @@
       resBox.style.color = "#fff";
       resBox.innerText = `正在驗證序號 ${code}...`;
 
-      fetch(`${API_URL}?action=checkin&code=${encodeURIComponent(code)}`)
-        .then(res => res.json())
+      callApi({ action: "checkin", code: code })
         .then(data => {
           if (data.status === "success") resBox.className = "result-box res-success";
           else if (data.status === "warning") resBox.className = "result-box res-warning";
