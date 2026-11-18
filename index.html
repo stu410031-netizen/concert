@@ -48,7 +48,7 @@
     .res-success { background: #064e3b; color: #34d399; border: 1px solid #059669; }
     .res-warning { background: #78350f; color: #fbbf24; border: 1px solid #d97706; }
     .res-error { background: #7f1d1d; color: #f87171; border: 1px solid #dc2626; }
-    .admin-footer { margin-top: 1.5rem; text-align: center; border-top: 1px solid #334155; padding-top: 1rem; display: flex; justify-content: space-between; }
+    .admin-footer { margin-top: 1.5rem; text-align: center; border-top: 1px solid #334155; padding-top: 1rem; }
     .admin-link { color: #64748b; font-size: 0.85rem; cursor: pointer; }
     #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 15px; background: #000; }
   </style>
@@ -57,14 +57,6 @@
 
   <div class="card">
     <h2>🎵 2026 精彩演唱會</h2>
-    
-    <!-- 首次設定 API 網址面板 -->
-    <div id="secSetup" style="display: none; background:#0f172a; padding:15px; border-radius:8px; border:1px solid #f59e0b; margin-bottom:15px;">
-      <div style="color:#f59e0b; font-weight:bold; margin-bottom:8px;">⚙️ 首次連線設定</div>
-      <div style="font-size:0.85rem; color:#cbd5e1; margin-bottom:10px;">請貼上 Google Apps Script 部署後的網頁應用程式網址（結尾為 /exec）：</div>
-      <input type="url" id="apiUrlInput" placeholder="https://script.google.com/macros/s/AKfycbz6zdSyNnMXLLTm6Mq-Am7FWpuah0cHqnkbbbO8HHH5KyjUj4P5mv5k02e1FqbiJAF3/exec" style="margin-bottom:10px;">
-      <button type="button" class="submit-btn green-btn" onclick="saveApiUrl()">儲存並連線試算表</button>
-    </div>
 
     <div class="nav-tabs" id="userTabs">
       <button class="tab-btn active" id="tabReg" onclick="switchTab('reg')">線上報名</button>
@@ -109,40 +101,19 @@
 
     <div class="admin-footer" id="adminFooter">
       <span class="admin-link" onclick="loginAdmin()">🔒 工作人員掃碼簽到</span>
-      <span class="admin-link" onclick="resetApiUrl()">⚙️ 重設試算表網址</span>
     </div>
   </div>
 
   <script>
-    let API_URL = localStorage.getItem("CONCERT_API_URL") || "";
+    // 👇 就是這一行！把引號裡面的字換成你的 /exec 網址即可
+    const API_URL = "https://script.google.com/macros/s/AKfycbz6zdSyNnMXLLTm6Mq-Am7FWpuah0cHqnkbbbO8HHH5KyjUj4P5mv5k02e1FqbiJAF3/exec";
+
     let html5QrCode = null;
     let isScanning = false;
 
     window.onload = function() {
-      if (!API_URL || !API_URL.includes("/exec")) {
-        document.getElementById("secSetup").style.display = "block";
-        document.getElementById("remCount").innerText = "尚未連線";
-      } else {
-        loadStatus();
-      }
-    };
-
-    function saveApiUrl() {
-      const val = document.getElementById("apiUrlInput").value.trim();
-      if (!val.startsWith("https://script.google.com/")) {
-        alert("請貼上正確的 Google Apps Script 網址！");
-        return;
-      }
-      localStorage.setItem("CONCERT_API_URL", val);
-      API_URL = val;
-      document.getElementById("secSetup").style.display = "none";
       loadStatus();
-    }
-
-    function resetApiUrl() {
-      document.getElementById("apiUrlInput").value = API_URL;
-      document.getElementById("secSetup").style.display = "block";
-    }
+    };
 
     function loadStatus() {
       document.getElementById("remCount").innerText = "讀取中...";
@@ -153,7 +124,6 @@
         })
         .catch(() => {
           document.getElementById("remCount").innerText = "連線失敗";
-          document.getElementById("secSetup").style.display = "block";
         });
     }
 
@@ -166,7 +136,6 @@
 
     document.getElementById("regForm").addEventListener("submit", function(e) {
       e.preventDefault();
-      if (!API_URL) { alert("請先設定試算表連線網址！"); return; }
       const btn = document.getElementById("regBtn");
       btn.disabled = true; btn.innerText = "報名處理中...";
 
@@ -196,7 +165,7 @@
       })
       .catch(() => {
         btn.disabled = false; btn.innerText = "立即報名";
-        alert("⚠️ 系統連線錯誤，請檢查試算表網址。");
+        alert("⚠️ 系統連線錯誤，請確認 API_URL 設定。");
       });
     });
 
@@ -254,7 +223,7 @@
       }
       document.getElementById("secAdmin").style.display = "none";
       document.getElementById("userTabs").style.display = "flex";
-      document.getElementById("adminFooter").style.display = "flex";
+      document.getElementById("adminFooter").style.display = "block";
       switchTab('reg');
     }
 
